@@ -95,6 +95,7 @@ if __name__ == '__main__':
         n_steps=n_steps,
         s_steps=s_steps,
         device ="cuda",
+        ddim_eta=0.,
     )
 
     if dataset_style == 'mnist':
