@@ -4,8 +4,7 @@
 
 - 论文 | <a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models</a> 
 
-- 论文中的【Algorithm 1 Training】和【Algorithm 2 Sampling】公式推导 | https://blog.csdn.net/u010006102/article/details/134648877
-- 复现代码 | https://github.com/FMsunyh/denoising-diffusion-pytorch
+- 复现代码 | https://github.com/FMsunyh/ddim-denoising-diffusion-pytorch
 
 
 ## python环境
