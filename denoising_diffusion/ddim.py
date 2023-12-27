@@ -48,12 +48,12 @@ class DenoiseDiffusion:
         # for DDIM
         self.ddim_alpha = self.alpha_bar[self.time_steps].clone().to(torch.float32)
         # self.ddim_alpha_sqrt = torch.sqrt(self.ddim_alpha)
-        # self.ddim_alpha_prev = torch.cat([self.alpha_bar[0:1], self.alpha_bar[self.time_steps[:-1]]])
-        # self.ddim_sigma = (ddim_eta *
-        #                        ((1 - self.ddim_alpha_prev) / (1 - self.ddim_alpha) *
-        #                         (1 - self.ddim_alpha / self.ddim_alpha_prev)) ** .5)
+        self.ddim_alpha_prev = torch.cat([self.alpha_bar[0:1], self.alpha_bar[self.time_steps[:-1]]])
+        self.ddim_sigma = (ddim_eta *
+                               ((1 - self.ddim_alpha_prev) / (1 - self.ddim_alpha) *
+                                (1 - self.ddim_alpha / self.ddim_alpha_prev)) ** .5)
         
-        # self.ddim_sqrt_one_minus_alpha = (1. - self.ddim_alpha) ** .5
+        self.ddim_sqrt_one_minus_alpha = (1. - self.ddim_alpha) ** .5
         
     # 下文中的q函数，就是训练过程需要用到的计算,
     def q_xt_x0(self, x0: torch.Tensor, t: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -88,28 +88,35 @@ class DenoiseDiffusion:
         return mean + (var ** 0.5) * eps
 
     # # 下文中的q函数，就是推理过程需要用到的计算，也就是论文中的 【Algorithm 2 Sampling】
-    # def p_sample(self, xt: torch.Tensor, t: torch.Tensor):
-    #     """
-    #     #### Sample from ${p_\theta}(x_{t-1}|x_t)$
-    #     """
+    def p_sample(self, x: torch.Tensor, t: torch.Tensor, index: int):
+        """
+        #### Sample from ${p_\theta}(x_{t-1}|x_t)$
+        """
 
-    #     # epsilon_theta(x_t, t)，这个就是Unet网络，输入为x_t,t
-    #     eps_theta = self.eps_model(xt, t)
-    #     # alpha_bar_t
-    #     alpha_bar = gather(self.alpha_bar, t)
-    #     # alpha_t
-    #     alpha = gather(self.alpha, t)
+        # epsilon_theta(x_t, t)，这个就是Unet网络，输入为x_t,t
+        eps_theta = self.eps_model(x, t)
         
-    #     eps_coef = (1 - alpha) / (1 - alpha_bar) ** .5
-       
-    #     mean = 1 / (alpha ** 0.5) * (xt - eps_coef * eps_theta)
-    #     # sigma^2
-    #     var = gather(self.sigma2, t)
-
-    #     # epsilon
-    #     eps = torch.randn(xt.shape, device=xt.device)
-    #     # Sample
-    #     return mean + (var ** .5) * eps
+        # alpha_bar_t
+        alpha = self.ddim_alpha[index] 
+            
+        # alpha_t
+        alpha_prev = self.ddim_alpha_prev[index]
+        sigma = self.ddim_sigma[index]
+        sqrt_one_minus_alpha = self.ddim_sqrt_one_minus_alpha[index]
+        pred_x0 = (x - sqrt_one_minus_alpha * eps_theta) / (alpha ** 0.5)
+        
+        
+        dir_xt = (1. - alpha_prev - sigma ** 2).sqrt() * eps_theta
+        # epsilon
+        if sigma == 0.:
+            eps=0. 
+        else:
+            eps = torch.randn(x.shape, device=x.device)
+      
+        xt_prev = (alpha_prev ** 0.5) * pred_x0 + dir_xt + sigma * eps
+        
+        # Sample
+        return xt_prev, pred_x0
 
     def loss(self, x0: torch.Tensor, noise: Optional[torch.Tensor] = None):
         """

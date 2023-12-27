@@ -7,6 +7,8 @@ import os
 import argparse
 from denoising_diffusion.dataset import MNISTDataset,CelebADataset
 
+import numpy as np
+
 # hyperparameters, don't modify
 n_channels=64
 channel_multipliers=[1,2,2,4]
@@ -41,9 +43,11 @@ def sample(epoch):
         x = torch.randn([n_samples, image_channels, image_size, image_size], device="cuda")
 
         # Remove noise for $T$ steps
-        for t_ in range(n_steps):
-            t = n_steps - t_ - 1
-            x = diffusion.p_sample(x, x.new_full((n_samples,), t, dtype=torch.long))
+        time_steps = np.flip(diffusion.time_steps)
+        for i, step in enumerate(time_steps):
+            index = len(time_steps) - i - 1
+            
+            x, pred_x0 = diffusion.p_sample(x, x.new_full((n_samples,), step, dtype=torch.long), index)
 
         # Log samples
         path = os.path.join("outputs/{}/epoch_{}".format(dataset_style, epoch))
