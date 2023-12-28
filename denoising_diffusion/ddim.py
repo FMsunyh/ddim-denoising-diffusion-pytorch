@@ -63,9 +63,9 @@ class DenoiseDiffusion:
 
         # self.alpha_bar存放的值 是在init函数计算出来的，每个index下的数值，都是和前面的alpha相乘
         # gather函数，通过t作为index去获取alpha_bar中的元素， 类似数组alpha_bar[t]
-        mean = gather(self.ddim_alpha, t) ** 0.5 * x0
+        mean = gather(self.alpha_bar, t) ** 0.5 * x0
         # $(1-\bar\alpha_t) \mathbf{I}$
-        var = 1 - gather(self.ddim_alpha, t)
+        var = 1 - gather(self.alpha_bar, t)
         #
         return mean, var
 
@@ -92,7 +92,8 @@ class DenoiseDiffusion:
         """
         #### Sample from ${p_\theta}(x_{t-1}|x_t)$
         """
-
+        # x就是当前的x_t, 计算xt_prev和x0,xt_prev就是x_{t-1}，pred_x0就是x0
+        # t,这里的t和DDPM中t是不同的， 这里的t取值是,比如[999,949, 899,...],有间隔的
         # epsilon_theta(x_t, t)，这个就是Unet网络，输入为x_t,t
         eps_theta = self.eps_model(x, t)
         
@@ -125,10 +126,19 @@ class DenoiseDiffusion:
         # batch size
         batch_size = x0.shape[0]
         
-        # t是随机的
+        # # t是随机的
+        # # 在DDPM中直接使用随机采集，获取t
+        # t = torch.randint(0, self.n_steps, (batch_size,), device=x0.device, dtype=torch.long)
         
-        t = torch.randint(0, len(self.time_steps), (batch_size,), device=x0.device, dtype=torch.long)
-
+        # Tips:在DDIM的源码中，学习到一个技巧，对称取样，让随机更加的均匀分布在 n_steps内
+        # 即一般的batch用随机，剩下的一半取对称
+        # antithetic sampling
+        t = torch.randint(
+            low=0, high=self.n_steps, size=(batch_size // 2 + 1,),
+        device=x0.device, dtype=torch.long)
+        t = torch.cat([t, self.n_steps - t - 1], dim=0)[:batch_size]
+        
+        
         # epsilon，就是N(0,1)出来的一个Noise,也就是GT label
         if noise is None:
             noise = torch.randn_like(x0)
